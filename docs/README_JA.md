@@ -1,6 +1,6 @@
 <p align="center">
-  <a href="../README.md"><img src="https://img.shields.io/badge/lang-中文-red?style=for-the-badge" alt="中文"></a>
-  <a href="./README_EN.md"><img src="https://img.shields.io/badge/lang-English-blue?style=for-the-badge" alt="English"></a>
+  <a href="./README_ZH.md"><img src="https://img.shields.io/badge/lang-中文-red?style=for-the-badge" alt="中文"></a>
+  <a href="../README.md"><img src="https://img.shields.io/badge/lang-English-blue?style=for-the-badge" alt="English"></a>
   <a href="./README_JA.md"><img src="https://img.shields.io/badge/lang-日本語-green?style=for-the-badge" alt="日本語"></a>
 </p>
 

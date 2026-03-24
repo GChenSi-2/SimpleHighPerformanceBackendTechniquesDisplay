@@ -1,21 +1,21 @@
 <p align="center">
-  <a href="./README.md"><img src="https://img.shields.io/badge/lang-中文-red?style=for-the-badge" alt="中文"></a>
-  <a href="./docs/README_EN.md"><img src="https://img.shields.io/badge/lang-English-blue?style=for-the-badge" alt="English"></a>
+  <a href="./docs/README_ZH.md"><img src="https://img.shields.io/badge/lang-中文-red?style=for-the-badge" alt="中文"></a>
+  <a href="./README.md"><img src="https://img.shields.io/badge/lang-English-blue?style=for-the-badge" alt="English"></a>
   <a href="./docs/README_JA.md"><img src="https://img.shields.io/badge/lang-日本語-green?style=for-the-badge" alt="日本語"></a>
 </p>
 
 <p align="center">
-  <b>📖 详细工程指南 / Detailed Guide → <a href="./docs/DETAILED_GUIDE.md">docs/DETAILED_GUIDE.md</a></b><br>
-  <b>📋 技术 PRD → <a href="./docs/TECHNICAL_PRD.md">docs/TECHNICAL_PRD.md</a></b>
+  <b>📖 Detailed Engineering Guide → <a href="./docs/DETAILED_GUIDE.md">docs/DETAILED_GUIDE.md</a></b><br>
+  <b>📋 Technical PRD (EN / 中文 / 日本語) → <a href="./docs/TECHNICAL_PRD.md">docs/TECHNICAL_PRD.md</a></b>
 </p>
 
 ---
 
-# 商品库存秒杀系统 —— 后端技术点学习项目
+# Inventory Flash-Sale System — Backend Learning Project
 
-一个极简的 Spring Boot 3 + React 项目，用 **商品下单扣库存** 这一个业务场景，覆盖 6 个核心后端技术点。
+A minimal **Spring Boot 3 + React** project that uses a single business scenario — **browse products → view details → place order → deduct inventory** — to demonstrate 6 core backend techniques for building high-concurrency, large-scale systems.
 
-## 架构总览
+## Architecture Overview
 
 ```
 ┌──────────┐     POST /api/orders      ┌──────────────┐
@@ -25,70 +25,72 @@
                                                │
                               ┌────────────────↓────────────────┐
                               │         Kafka Producer           │
-                              │   key=skuId → 同SKU同分区(顺序)  │
+                              │  key=skuId → same SKU same      │
+                              │  partition (ordered processing)  │
                               └────────────────┬────────────────┘
                                                │
                               ┌────────────────↓────────────────┐
                               │         Kafka Consumer           │
-                              │  (异步消费，削峰填谷)              │
+                              │  (async consumption, peak        │
+                              │   shaving & valley filling)      │
                               └────────────────┬────────────────┘
                                                │
                     ┌──────────────────────────────────────────────┐
-                    │           MySQL 单事务内完成                    │
+                    │       Single MySQL Transaction                │
                     │                                              │
-                    │  1. INSERT IGNORE t_processed_event (幂等)    │
-                    │  2. UPDATE t_product SET stock=stock-1        │
-                    │     WHERE stock>=1 (原子扣库存)                │
-                    │  3. INSERT t_order (创建订单)                  │
-                    │  4. INSERT t_outbox (Outbox事件)              │
+                    │  1. INSERT IGNORE t_processed_event (idemp.) │
+                    │  2. UPDATE t_product SET stock=stock-1       │
+                    │     WHERE stock>=1 (atomic deduction)        │
+                    │  3. INSERT t_order (create order)            │
+                    │  4. INSERT t_outbox (outbox event)           │
                     └──────────────────────────────────────────────┘
                                                │
                               ┌────────────────↓────────────────┐
-                              │     Outbox 后台发布 (@Scheduled)  │
-                              │  扫描 status=0 → 发Kafka → 标1   │
+                              │  Outbox Background Publisher     │
+                              │  (@Scheduled) scan status=0     │
+                              │  → send to Kafka → mark as 1    │
                               └─────────────────────────────────┘
 
   ┌─────────────────────────────────────────────────────────────┐
-  │  GET /api/products/{skuId}  商品详情 (读路径)                 │
+  │  GET /api/products/{skuId}  Product Detail (Read Path)      │
   │                                                             │
-  │  CompletableFuture.supplyAsync 并发发起3个查询:               │
-  │    ① 商品信息 (Redis缓存 → 互斥锁回源 → TTL抖动)             │
-  │    ② 实时库存 (直查DB)                                       │
-  │    ③ 促销信息 (查DB)                                         │
-  │  各自设超时，超时则降级返回默认值                                │
+  │  CompletableFuture.supplyAsync fans out 3 queries:          │
+  │    ① Product info (Redis cache → mutex lock → TTL jitter)   │
+  │    ② Realtime stock (direct DB)                             │
+  │    ③ Promotions (DB)                                        │
+  │  Each with independent timeout; degrade on timeout          │
   └─────────────────────────────────────────────────────────────┘
 ```
 
-## 6 个技术点对照表
+## The 6 Core Techniques
 
-| # | 技术点 | 文件位置 | 关键代码 |
-|---|--------|---------|---------|
-| 1 | **削峰填谷** (Kafka异步) | `OrderKafkaProducer.java` / `OrderKafkaConsumer.java` | 下单 → 发Kafka → 异步消费 |
-| 2 | **Outbox最终一致** | `OrderProcessingService.java` / `OutboxPublisher.java` | 事务内写outbox，定时扫描发布 |
-| 3 | **幂等** (INSERT IGNORE) | `ProcessedEventRepository.java` / `OrderProcessingService.java` | `INSERT IGNORE t_processed_event` |
-| 4 | **原子扣库存 + 分区顺序** | `ProductRepository.java` / `OrderKafkaProducer.java` | `stock=stock-1 WHERE stock>=1` + key=skuId |
-| 5 | **CompletableFuture并发读** | `ProductDetailService.java` | 3个异步查询 + 超时降级 |
-| 6 | **Redis缓存** (防击穿/雪崩) | `ProductCacheService.java` | 互斥锁 + TTL随机抖动 + 空值缓存 |
+| # | Technique | Key Files | What It Does |
+|---|-----------|-----------|-------------|
+| 1 | **Peak Shaving** (Kafka async) | `OrderKafkaProducer.java` / `OrderKafkaConsumer.java` | Order → Kafka → async consume, no sync DB blocking |
+| 2 | **Outbox Eventual Consistency** | `OrderProcessingService.java` / `OutboxPublisher.java` | Write outbox in same TX, scheduled background publish |
+| 3 | **Idempotency** (INSERT IGNORE) | `ProcessedEventRepository.java` / `OrderProcessingService.java` | `INSERT IGNORE t_processed_event` deduplicates messages |
+| 4 | **Atomic Stock + Partition Order** | `ProductRepository.java` / `OrderKafkaProducer.java` | `stock=stock-1 WHERE stock>=1` + key=skuId partitioning |
+| 5 | **CompletableFuture Parallel Read** | `ProductDetailService.java` | 3 async queries + per-query timeout degradation |
+| 6 | **Redis Cache** (anti-stampede/avalanche) | `ProductCacheService.java` | Mutex lock + TTL jitter + null-value caching |
 
-**扩展点：** Kafka 重试 topic + DLQ 死信队列见 `OrderKafkaConsumer.java`
+**Bonus:** Kafka retry topic + DLQ dead-letter queue → see `OrderKafkaConsumer.java`
 
-## 快速启动
+## Quick Start
 
-### 1. 启动依赖 (MySQL + Redis + Kafka)
+### 1. Start Infrastructure (MySQL + Redis + Kafka)
 
 ```bash
 docker-compose up -d
 ```
 
-### 2. 启动后端
+### 2. Start Backend
 
 ```bash
 cd inventory-service
-./mvnw spring-boot:run
-# Windows: mvnw.cmd spring-boot:run
+mvn spring-boot:run
 ```
 
-### 3. 启动前端
+### 3. Start Frontend
 
 ```bash
 cd frontend
@@ -96,42 +98,55 @@ npm install
 npm run dev
 ```
 
-访问 http://localhost:5173
+Visit http://localhost:5173
 
-## 项目结构
+## Tech Stack
+
+| Layer | Technology | Version |
+|---|---|---|
+| Framework | Spring Boot | 3.2.5 |
+| Language | Java | 17 |
+| ORM | Spring Data JPA + Hibernate 6 | — |
+| Database | MySQL | 8.0 |
+| Message Queue | Apache Kafka (KRaft) | 3.7.0 |
+| Cache | Redis | 7 |
+| Frontend | React + Vite | 18.3 / 5.2 |
+| Container | Docker Compose | 3.8 |
+
+## Project Structure
 
 ```
 BackendExample/
-├── docker-compose.yml          # 一键启动 MySQL/Redis/Kafka
-├── sql/schema.sql              # 数据库建表 + 测试数据
-├── inventory-service/          # Spring Boot 后端
+├── docker-compose.yml          # One-command infra: MySQL/Redis/Kafka
+├── sql/schema.sql              # DB schema + seed data
+├── inventory-service/          # Spring Boot backend
 │   └── src/main/java/com/example/inventory/
-│       ├── config/             # Kafka Topic、Redis、异步线程池、CORS配置
-│       ├── entity/             # JPA实体：Product, Order, Outbox, ProcessedEvent, Promotion
-│       ├── repository/         # 数据访问层（含原子扣库存SQL、INSERT IGNORE）
-│       ├── kafka/              # Kafka 生产者/消费者/事件模型
-│       ├── outbox/             # Outbox 后台发布定时任务
-│       ├── service/            # 业务逻辑层
-│       │   ├── OrderService.java           # 下单 → 发Kafka
-│       │   ├── OrderProcessingService.java # Kafka消费端核心(幂等+扣库存+outbox)
-│       │   ├── ProductCacheService.java    # Redis缓存(互斥锁+TTL抖动)
-│       │   ├── ProductDetailService.java   # CompletableFuture并发聚合
-│       │   └── ProductService.java         # 商品CRUD
-│       └── controller/         # REST API
-└── frontend/                   # React + Vite 前端
+│       ├── config/             # Kafka topics, Redis, async thread pool, CORS
+│       ├── entity/             # JPA entities: Product, Order, Outbox, ProcessedEvent, Promotion
+│       ├── repository/         # Data access (atomic stock SQL, INSERT IGNORE)
+│       ├── kafka/              # Producer / Consumer / Event model
+│       ├── outbox/             # Outbox background scheduled publisher
+│       ├── service/            # Business logic
+│       │   ├── OrderService.java           # Place order → send to Kafka
+│       │   ├── OrderProcessingService.java # Consumer core (idempotent + deduct + outbox)
+│       │   ├── ProductCacheService.java    # Redis cache (mutex + TTL jitter)
+│       │   ├── ProductDetailService.java   # CompletableFuture aggregation
+│       │   └── ProductService.java         # Product CRUD
+│       └── controller/         # REST API endpoints
+└── frontend/                   # React + Vite frontend
     └── src/
-        ├── api/index.js        # API调用封装
-        └── components/         # 商品列表、详情、订单列表
+        ├── api/index.js        # API call wrappers
+        └── components/         # ProductList, ProductDetail, OrderList
 ```
 
-## 面试扩展问题
+## Interview Extension Topics
 
-### Kafka 重试与 DLQ
-- **可重试异常**（DB超时等）→ 发到 `order-events-retry` topic，最多重试3次
-- **不可重试异常**（库存不足）→ 直接标记失败，不进重试队列
-- **超过重试次数** → 发到 `order-events-dlq` 死信队列，人工介入
+### Kafka Retry & DLQ
+- **Retryable exceptions** (DB timeout, etc.) → send to `order-events-retry` topic, max 3 retries
+- **Non-retryable exceptions** (insufficient stock) → mark as failed, no retry
+- **Exceeded max retries** → send to `order-events-dlq` dead-letter queue for manual handling
 
-### Topic 分区数选择
-- 本项目配 **12分区**，适合中等规模（消费者数 ≤ 分区数）
-- 生产环境常用 **12/24/48**，取决于消费端并发能力
-- **热点SKU瓶颈**：单个热点SKU所有消息落在同一分区，可通过「分区内再分桶」或「热点SKU独立topic」解决
+### Topic Partition Count
+- This project uses **12 partitions** — suitable for medium scale (consumers ≤ partitions)
+- Production commonly uses **12 / 24 / 48** depending on consumer throughput
+- **Hot SKU bottleneck**: all messages for one SKU land in the same partition; solve via "sub-bucketing within partition" or "dedicated topic for hot SKUs"
