@@ -1,6 +1,19 @@
+<p align="center">
+  <a href="./README.md"><img src="https://img.shields.io/badge/lang-中文-red?style=for-the-badge" alt="中文"></a>
+  <a href="./docs/README_EN.md"><img src="https://img.shields.io/badge/lang-English-blue?style=for-the-badge" alt="English"></a>
+  <a href="./docs/README_JA.md"><img src="https://img.shields.io/badge/lang-日本語-green?style=for-the-badge" alt="日本語"></a>
+</p>
+
+<p align="center">
+  <b>📖 详细工程指南 / Detailed Guide → <a href="./docs/DETAILED_GUIDE.md">docs/DETAILED_GUIDE.md</a></b><br>
+  <b>📋 技术 PRD → <a href="./docs/TECHNICAL_PRD.md">docs/TECHNICAL_PRD.md</a></b>
+</p>
+
+---
+
 # 商品库存秒杀系统 —— 后端技术点学习项目
 
-一个极简的 Spring Boot + React 项目，用 **商品下单扣库存** 这一个业务场景，覆盖 6 个核心后端技术点。
+一个极简的 Spring Boot 3 + React 项目，用 **商品下单扣库存** 这一个业务场景，覆盖 6 个核心后端技术点。
 
 ## 架构总览
 
